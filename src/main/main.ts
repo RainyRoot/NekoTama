@@ -30,10 +30,12 @@ function createPetWindow(): BrowserWindow {
   // Allow click-through on transparent areas
   win.setIgnoreMouseEvents(false);
 
-  win.loadFile(path.join(__dirname, '../../src/renderer/pet/index.html'));
-
-  if (process.env.NODE_ENV === 'development') {
+  const VITE_DEV_URL = process.env.VITE_DEV_SERVER_URL;
+  if (VITE_DEV_URL) {
+    win.loadURL(VITE_DEV_URL);
     win.webContents.openDevTools({ mode: 'detach' });
+  } else {
+    win.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
   }
 
   return win;
