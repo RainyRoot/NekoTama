@@ -1,0 +1,18 @@
+node_modules/
+dist/
+out/
+.env
+*.log
+.DS_Store
+
+# Dev tooling
+.claude/
+CLAUDE.md
+prompt.md
+progress.md
+
+# Build artifacts
+*.AppImage
+*.deb
+*.exe
+release/
