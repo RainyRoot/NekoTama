@@ -1,0 +1,39 @@
+{
+  "idle": [
+    "uwu~",
+    "nyaa~",
+    "btw I use arch",
+    "( ´ ▽ ` )",
+    "zzzz..."
+  ],
+  "happy": [
+    "yay! ヽ(>▽<)ノ",
+    "so happy~",
+    "( ˶ˆ꒳ˆ˵ )",
+    "arigato~~"
+  ],
+  "hungry": [
+    "feed me pls (｡•́︿•̀｡)",
+    "hungry... so hungry",
+    "onigiri??? 🍙",
+    "i can smell ramen..."
+  ],
+  "tired": [
+    "sleepy... (－ω－) zzZ",
+    "need coffee...",
+    "5 more minutes...",
+    "z z z"
+  ],
+  "sad": [
+    "(っ◞‸◟c)",
+    "no network... am alone",
+    "low battery... goodbye cruel world",
+    "( ˘︹˘ )"
+  ],
+  "cpu_high": [
+    "WHAT ARE YOU COMPILING",
+    "TOO HOT AAA (๑òᆺó๑)",
+    "pacman -Syu please stop",
+    "send help"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "name": "nekotama",
+  "version": "0.1.0",
+  "description": "Anime desktop pet for Linux — Tamagotchi meets system monitor",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"npm run build:main:watch\" \"wait-on http://localhost:5173 dist/main/main.js && cross-env ELECTRON_RUN_AS_NODE= VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
+    "build": "npm run build:main && vite build",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:main:watch": "tsc -p tsconfig.main.json --watch",
+    "start": "cross-env ELECTRON_RUN_AS_NODE= electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [
+    "anime",
+    "desktop-pet",
+    "electron",
+    "linux",
+    "tamagotchi"
+  ],
+  "author": "rainyroot",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/node-cron": "^3.0.11",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "concurrently": "^8.0.0",
+    "cross-env": "^10.1.0",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^8.0.7",
+    "wait-on": "^7.0.0"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "node-cron": "^3.0.0",
+    "pixi.js": "^8.17.1",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "systeminformation": "^5.0.0"
+  },
+  "build": {
+    "appId": "dev.rainyroot.nekotama",
+    "productName": "NekoTama",
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "files": [
+      "dist/**/*",
+      "src/assets/**/*",
+      "!src/**/*.ts"
+    ]
+  }
+}
