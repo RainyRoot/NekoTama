@@ -2,6 +2,10 @@ import * as PIXI from 'pixi.js';
 import { StateMachine } from './StateMachine';
 import { SpriteManager } from './SpriteManager';
 import { Physics } from './Physics';
+import { SpeechBubble } from './SpeechBubble';
+import { StatsManager } from '../../core/stats';
+import { getMood } from '../../core/personality';
+import type { PersistedState } from '../../core/persistence';
 
 declare const window: Window & {
   nekotama: {
@@ -13,6 +17,10 @@ declare const window: Window & {
     loadPetState: () => Promise<unknown>;
   };
 };
+
+const DECAY_INTERVAL_MS = 60_000; // 1 minute
+const BUBBLE_INTERVAL_MS = 15_000; // speech bubble every 15s
+const SAVE_INTERVAL_MS = 30_000;
 
 async function main(): Promise<void> {
   const app = new PIXI.Application();
@@ -30,14 +38,11 @@ async function main(): Promise<void> {
   const stateMachine = new StateMachine();
   const spriteManager = new SpriteManager(app);
   const physics = new Physics(app.canvas as HTMLCanvasElement);
+  const bubble = new SpeechBubble(app);
 
-  // Try to load sprites; fall back to placeholder
-  try {
-    await spriteManager.load('../../src/assets/sprites/sfw/nekotama-sheet.png');
-  } catch {
-    console.warn('Sprite sheet not found, using placeholder');
-    spriteManager.createPlaceholder();
-  }
+  // Load persisted state or start fresh
+  const saved = await window.nekotama.loadPetState() as PersistedState | null;
+  const stats = new StatsManager(saved?.stats);
 
   // Sync sprite with state machine
   stateMachine.onEnter('idle',      () => spriteManager.setState('idle'));
@@ -48,34 +53,109 @@ async function main(): Promise<void> {
   stateMachine.onEnter('sad',       () => spriteManager.setState('sad'));
   stateMachine.onEnter('panicking', () => spriteManager.setState('panicking'));
 
-  // Click-through on transparent pixels
+  // Load sprites or fall back to placeholder
+  try {
+    await spriteManager.load('../../src/assets/sprites/sfw/nekotama-sheet.png');
+  } catch {
+    console.warn('No sprite sheet found, using placeholder');
+    spriteManager.createPlaceholder();
+  }
+
+  // Click-through: disabled while dragging, enabled otherwise
   physics.onDrag(
     () => window.nekotama.setIgnoreMouseEvents(false),
     () => window.nekotama.setIgnoreMouseEvents(true, { forward: true }),
   );
 
-  // React to system events from main process
+  // Double-click to feed (quick interaction)
+  app.canvas.addEventListener('dblclick', () => {
+    stats.feed(20, 10);
+    stateMachine.forceTransition('eating');
+    bubble.show('eating');
+    setTimeout(() => applyMoodToState(), 3000);
+  });
+
+  // Right-click to pet
+  app.canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    stats.pet(15);
+    stateMachine.forceTransition('excited');
+    bubble.show('happy');
+    setTimeout(() => applyMoodToState(), 2000);
+  });
+
+  // System events from main process
   window.nekotama.onSystemEvent(({ type }) => {
     switch (type) {
-      case 'cpu-high':    stateMachine.forceTransition('panicking'); break;
-      case 'cpu-normal':  stateMachine.forceTransition('idle');      break;
-      case 'battery-low': stateMachine.forceTransition('sad');       break;
-      case 'no-network':  stateMachine.forceTransition('sad');       break;
-      case 'time-of-day': /* handled in Phase 3 */ break;
+      case 'cpu-high':
+        stateMachine.forceTransition('panicking');
+        bubble.show('cpu_high');
+        break;
+      case 'cpu-normal':
+        applyMoodToState();
+        break;
+      case 'battery-low':
+        stateMachine.forceTransition('sad');
+        bubble.show('sad');
+        break;
+      case 'no-network':
+        stateMachine.forceTransition('sad');
+        bubble.show('sad');
+        break;
+      case 'time-of-day':
+        applyMoodToState();
+        break;
     }
   });
 
-  // Game loop tick every 2 seconds
-  let tickInterval = 0;
+  function applyMoodToState(): void {
+    const mood = getMood(stats.current);
+    switch (mood) {
+      case 'happy':   stateMachine.forceTransition('excited'); break;
+      case 'hungry':  stateMachine.forceTransition('sad');     break;
+      case 'tired':   stateMachine.forceTransition('sleeping');break;
+      case 'sad':     stateMachine.forceTransition('sad');     break;
+      default:        stateMachine.tick();                     break;
+    }
+  }
+
+  // Stat decay every minute
+  setInterval(() => {
+    stats.decay();
+    applyMoodToState();
+  }, DECAY_INTERVAL_MS);
+
+  // Random speech bubble
+  setInterval(() => {
+    const mood = getMood(stats.current);
+    bubble.show(mood === 'neutral' ? 'idle' : mood);
+  }, BUBBLE_INTERVAL_MS);
+
+  // Persist state
+  setInterval(() => {
+    window.nekotama.savePetState({
+      stats: stats.toJSON(),
+      level: saved?.level ?? 1,
+      xp: saved?.xp ?? 0,
+      lastSeen: new Date().toISOString(),
+    } satisfies PersistedState);
+  }, SAVE_INTERVAL_MS);
+
+  // Game loop: random idle behaviour tick every 2s
+  let tickFrames = 0;
   app.ticker.add(() => {
-    tickInterval++;
-    if (tickInterval >= 120) { // ~2s at 60fps
-      stateMachine.tick();
-      tickInterval = 0;
+    tickFrames++;
+    if (tickFrames >= 120) {
+      // Only tick idle/walking transitions if no strong mood is overriding
+      const mood = getMood(stats.current);
+      if (mood === 'neutral') stateMachine.tick();
+      tickFrames = 0;
     }
   });
 
-  // Enable click-through by default on transparent areas
+  // Apply initial mood
+  applyMoodToState();
+
   window.nekotama.setIgnoreMouseEvents(true, { forward: true });
 }
 
