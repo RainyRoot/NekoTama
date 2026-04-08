@@ -1,19 +1,25 @@
 import * as PIXI from 'pixi.js';
 
-type BubbleCategory = 'idle' | 'happy' | 'hungry' | 'tired' | 'sad' | 'cpu_high' | 'eating';
+type BubbleCategory =
+  | 'idle' | 'happy' | 'hungry' | 'tired' | 'sad'
+  | 'cpu_high' | 'eating' | 'morning' | 'night' | 'midnight' | 'ram_low';
 
 const LINES: Record<BubbleCategory, string[]> = {
-  idle:    ['uwu~', 'nyaa~', 'btw I use arch', '( ´ ▽ ` )', '*yawns*', '...'],
-  happy:   ['yay! ヽ(>▽<)ノ', 'so happy~', '( ˶ˆ꒳ˆ˵ )', 'arigato~~', 'hehe :3'],
-  hungry:  ['feed me pls (｡•́︿•̀｡)', 'hungry...', 'onigiri??? 🍙', 'i can smell ramen...'],
-  tired:   ['sleepy... zzZ', 'need coffee...', '5 more minutes...', 'z z z'],
-  sad:     ['(っ◞‸◟c)', 'no network... am alone', 'low battery...', '( ˘︹˘ )'],
+  idle:     ['uwu~', 'nyaa~', 'btw I use arch', '( ´ ▽ ` )', '*yawns*', '...'],
+  happy:    ['yay! ヽ(>▽<)ノ', 'so happy~', '( ˶ˆ꒳ˆ˵ )', 'arigato~~', 'hehe :3'],
+  hungry:   ['feed me pls (｡•́︿•̀｡)', 'hungry...', 'onigiri??? 🍙', 'i can smell ramen...'],
+  tired:    ['sleepy... zzZ', 'need coffee...', '5 more minutes...', 'z z z'],
+  sad:      ['(っ◞‸◟c)', 'no network... am alone', 'low battery...', '( ˘︹˘ )'],
   cpu_high: ['WHAT ARE YOU COMPILING', 'TOO HOT AAA', 'pacman -Syu pls stop', 'send help'],
-  eating:  ['nom nom~', 'oishii!!', 'yummy :3', '*chomp*'],
+  eating:   ['nom nom~', 'oishii!!', 'yummy :3', '*chomp*'],
+  morning:  ['ohayo~', '*big yawn*', 'good morning uwu', 'morning stretch~', 'coffee pls...'],
+  night:    ['oyasumi~', 'good night...', 'sleepy time...', 'z z z', 'so tired...'],
+  midnight: ['its midnight o_o', 'spooky hour!', 'why are you awake...', '(✿ ◡‿◡)', 'its so quiet...'],
+  ram_low:  ['memory is full...', 'too many tabs!!', 'pls close something', 'RAM go brr', 'oof out of memory'],
 };
 
 const DISPLAY_MS = 4000;
-const FADE_MS = 400;
+const FADE_MS    = 400;
 
 export class SpeechBubble {
   private app: PIXI.Application;
@@ -53,8 +59,8 @@ export class SpeechBubble {
     });
 
     const pad = 6;
-    const bw = label.width + pad * 2;
-    const bh = label.height + pad * 2;
+    const bw  = label.width + pad * 2;
+    const bh  = label.height + pad * 2;
 
     const bg = new PIXI.Graphics();
     bg.roundRect(0, 0, bw, bh, 8).fill({ color: 0xffffff, alpha: 0.92 });
@@ -70,7 +76,6 @@ export class SpeechBubble {
     const c = new PIXI.Container();
     c.addChild(bg, label);
 
-    // Position: above the pet, centered
     c.x = (this.app.screen.width - bw) / 2;
     c.y = Math.max(2, 50 - bh - 10);
     c.alpha = 0;
@@ -78,7 +83,6 @@ export class SpeechBubble {
     this.app.stage.addChild(c);
     this.container = c;
 
-    // Fade in
     this.fadeTo(c, 1, FADE_MS, () => {
       this.hideTimer = setTimeout(() => {
         this.fadeTo(c, 0, FADE_MS, () => {
@@ -94,7 +98,7 @@ export class SpeechBubble {
 
   private fadeTo(target: PIXI.Container, toAlpha: number, durationMs: number, onDone?: () => void): void {
     const startAlpha = target.alpha;
-    const startTime = performance.now();
+    const startTime  = performance.now();
 
     const tick = () => {
       const elapsed = performance.now() - startTime;

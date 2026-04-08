@@ -59,6 +59,17 @@ export class SystemMonitor {
       }),
     );
 
+    // Check RAM every 30 seconds
+    this.jobs.push(
+      cron.schedule('*/30 * * * * *', async () => {
+        const mem = await si.mem();
+        const freeMB = Math.round(mem.available / 1024 / 1024);
+        if (freeMB < 500) {
+          this.emit('ram-low', { freeMB });
+        }
+      }),
+    );
+
     // Check time-of-day every minute, emit only on change
     this.jobs.push(
       cron.schedule('* * * * *', () => {

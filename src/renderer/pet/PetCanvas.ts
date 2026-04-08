@@ -3,8 +3,12 @@ import { StateMachine } from './StateMachine';
 import { SpriteManager } from './SpriteManager';
 import { Physics } from './Physics';
 import { SpeechBubble } from './SpeechBubble';
+import { LevelUpFX } from '../ui/LevelUpFX';
 import { StatsManager } from '../../core/stats';
 import { getMood } from '../../core/personality';
+import { xpToLevel, xpProgressInLevel, XP_REWARDS } from '../../core/leveling';
+import { checkAchievements, DEFAULT_COUNTERS } from '../../core/achievements';
+import type { Achievement, AchievementCounters } from '../../core/achievements';
 import type { PersistedState } from '../../core/persistence';
 
 declare const window: Window & {
@@ -18,9 +22,9 @@ declare const window: Window & {
   };
 };
 
-const DECAY_INTERVAL_MS = 60_000; // 1 minute
-const BUBBLE_INTERVAL_MS = 15_000; // speech bubble every 15s
-const SAVE_INTERVAL_MS = 30_000;
+const DECAY_INTERVAL_MS  = 60_000;
+const BUBBLE_INTERVAL_MS = 15_000;
+const SAVE_INTERVAL_MS   = 30_000;
 
 async function main(): Promise<void> {
   const app = new PIXI.Application();
@@ -37,12 +41,47 @@ async function main(): Promise<void> {
 
   const stateMachine = new StateMachine();
   const spriteManager = new SpriteManager(app);
-  const physics = new Physics(app.canvas as HTMLCanvasElement);
-  const bubble = new SpeechBubble(app);
+  const physics       = new Physics(app.canvas as HTMLCanvasElement);
+  const bubble        = new SpeechBubble(app);
+  const levelUpFX     = new LevelUpFX(app);
 
   // Load persisted state or start fresh
   const saved = await window.nekotama.loadPetState() as PersistedState | null;
-  const stats = new StatsManager(saved?.stats);
+  const stats  = new StatsManager(saved?.stats);
+
+  // XP / level / achievement state
+  let xp           = saved?.xp ?? 0;
+  let level        = xpToLevel(xp);
+  let achievements: Achievement[]      = saved?.achievements ?? [];
+  let counters:     AchievementCounters = saved?.counters ?? { ...DEFAULT_COUNTERS };
+
+  // Grant XP and fire level-up effect when crossing a threshold
+  function grantXP(amount: number): void {
+    const prev = level;
+    xp   += amount;
+    level = xpToLevel(xp);
+    if (level > prev) levelUpFX.play(level);
+  }
+
+  // Merge newly unlocked achievements into the running list
+  function runAchievementCheck(): void {
+    const newly = checkAchievements(achievements, counters, level);
+    for (const a of newly) {
+      const idx = achievements.findIndex((x) => x.id === a.id);
+      if (idx === -1) achievements.push(a);
+      else achievements[idx] = a;
+    }
+  }
+
+  // Daily login bonus: XP + increment day counter
+  if (saved?.lastSeen) {
+    const lastDate = new Date(saved.lastSeen).toDateString();
+    const today    = new Date().toDateString();
+    if (lastDate !== today) {
+      counters.daysActive++;
+      grantXP(XP_REWARDS.dailyLogin);
+    }
+  }
 
   // Sync sprite with state machine
   stateMachine.onEnter('idle',      () => spriteManager.setState('idle'));
@@ -67,11 +106,14 @@ async function main(): Promise<void> {
     () => window.nekotama.setIgnoreMouseEvents(true, { forward: true }),
   );
 
-  // Double-click to feed (quick interaction)
+  // Double-click to feed
   app.canvas.addEventListener('dblclick', () => {
     stats.feed(20, 10);
+    counters.feedCount++;
+    grantXP(XP_REWARDS.feed);
     stateMachine.forceTransition('eating');
     bubble.show('eating');
+    runAchievementCheck();
     setTimeout(() => applyMoodToState(), 3000);
   });
 
@@ -79,17 +121,23 @@ async function main(): Promise<void> {
   app.canvas.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     stats.pet(15);
+    counters.petCount++;
+    grantXP(XP_REWARDS.pet);
     stateMachine.forceTransition('excited');
     bubble.show('happy');
+    runAchievementCheck();
     setTimeout(() => applyMoodToState(), 2000);
   });
 
   // System events from main process
-  window.nekotama.onSystemEvent(({ type }) => {
+  window.nekotama.onSystemEvent(({ type, payload }) => {
     switch (type) {
       case 'cpu-high':
+        counters.cpuHighCount++;
         stateMachine.forceTransition('panicking');
         bubble.show('cpu_high');
+        grantXP(XP_REWARDS.systemEvent);
+        runAchievementCheck();
         break;
       case 'cpu-normal':
         applyMoodToState();
@@ -102,20 +150,35 @@ async function main(): Promise<void> {
         stateMachine.forceTransition('sad');
         bubble.show('sad');
         break;
-      case 'time-of-day':
+      case 'ram-low':
+        bubble.show('ram_low');
+        break;
+      case 'time-of-day': {
+        const period = (payload as { period?: string })?.period;
+        if (period === 'morning') {
+          bubble.show('morning');
+          stateMachine.forceTransition('idle');
+        } else if (period === 'midnight') {
+          bubble.show('midnight');
+          counters.nightOwlSeen = true;
+          runAchievementCheck();
+        } else if (period === 'night') {
+          bubble.show('night');
+        }
         applyMoodToState();
         break;
+      }
     }
   });
 
   function applyMoodToState(): void {
     const mood = getMood(stats.current);
     switch (mood) {
-      case 'happy':   stateMachine.forceTransition('excited'); break;
-      case 'hungry':  stateMachine.forceTransition('sad');     break;
-      case 'tired':   stateMachine.forceTransition('sleeping');break;
-      case 'sad':     stateMachine.forceTransition('sad');     break;
-      default:        stateMachine.tick();                     break;
+      case 'happy':  stateMachine.forceTransition('excited');  break;
+      case 'hungry': stateMachine.forceTransition('sad');      break;
+      case 'tired':  stateMachine.forceTransition('sleeping'); break;
+      case 'sad':    stateMachine.forceTransition('sad');      break;
+      default:       stateMachine.tick();                      break;
     }
   }
 
@@ -125,19 +188,21 @@ async function main(): Promise<void> {
     applyMoodToState();
   }, DECAY_INTERVAL_MS);
 
-  // Random speech bubble
+  // Random speech bubble every 15s
   setInterval(() => {
     const mood = getMood(stats.current);
     bubble.show(mood === 'neutral' ? 'idle' : mood);
   }, BUBBLE_INTERVAL_MS);
 
-  // Persist state
+  // Persist full state every 30s
   setInterval(() => {
     window.nekotama.savePetState({
       stats: stats.toJSON(),
-      level: saved?.level ?? 1,
-      xp: saved?.xp ?? 0,
+      level,
+      xp,
       lastSeen: new Date().toISOString(),
+      achievements,
+      counters,
     } satisfies PersistedState);
   }, SAVE_INTERVAL_MS);
 
@@ -146,16 +211,13 @@ async function main(): Promise<void> {
   app.ticker.add(() => {
     tickFrames++;
     if (tickFrames >= 120) {
-      // Only tick idle/walking transitions if no strong mood is overriding
       const mood = getMood(stats.current);
       if (mood === 'neutral') stateMachine.tick();
       tickFrames = 0;
     }
   });
 
-  // Apply initial mood
   applyMoodToState();
-
   window.nekotama.setIgnoreMouseEvents(true, { forward: true });
 }
 
