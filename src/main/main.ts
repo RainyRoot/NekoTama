@@ -27,15 +27,22 @@ function createPetWindow(): BrowserWindow {
     },
   });
 
-  // Allow click-through on transparent areas
   win.setIgnoreMouseEvents(false);
+
+  // Always open DevTools until Phase 1 is stable
+  win.webContents.openDevTools({ mode: 'detach' });
+
+  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[NekoTama] Renderer failed to load: ${desc} (${code}) — ${url}`);
+  });
 
   const VITE_DEV_URL = process.env.VITE_DEV_SERVER_URL;
   if (VITE_DEV_URL) {
     win.loadURL(VITE_DEV_URL);
-    win.webContents.openDevTools({ mode: 'detach' });
   } else {
-    win.loadFile(path.join(__dirname, '../renderer/pet/index.html'));
+    const htmlPath = path.join(__dirname, '../renderer/pet/index.html');
+    console.log('[NekoTama] Loading:', htmlPath);
+    win.loadFile(htmlPath);
   }
 
   return win;
@@ -44,11 +51,13 @@ function createPetWindow(): BrowserWindow {
 app.whenReady().then(() => {
   petWindow = createPetWindow();
 
-  setupTray(petWindow);
+  try { setupTray(petWindow); } catch (e) { console.error('[NekoTama] Tray error:', e); }
   setupIpcHandlers(petWindow);
 
-  const systemMonitor = new SystemMonitor(petWindow);
-  systemMonitor.start();
+  try {
+    const systemMonitor = new SystemMonitor(petWindow);
+    systemMonitor.start();
+  } catch (e) { console.error('[NekoTama] SystemMonitor error:', e); }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

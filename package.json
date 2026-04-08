@@ -36,10 +36,9 @@
     "wait-on": "^7.0.0"
   },
   "dependencies": {
-    "@pixi/assets": "^7.0.0",
     "electron-store": "^8.1.0",
     "node-cron": "^3.0.0",
-    "pixi.js": "^7.0.0",
+    "pixi.js": "^8.17.1",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "systeminformation": "^5.0.0"
