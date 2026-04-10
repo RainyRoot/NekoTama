@@ -1,6 +1,6 @@
 # NekoTama 🐱
 
-> Anime desktop pet for Linux Tamagotchi meets system monitor
+Anime desktop pet for Linux Tamagotchi meets system monitor
 
 A transparent, frameless desktop companion that lives on your screen, reacts to your system events, and keeps you company while you rice your Arch install.
 
